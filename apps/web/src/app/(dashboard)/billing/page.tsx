@@ -4,7 +4,7 @@ import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { RoleContext } from "../layout";
 import { formatCurrency, generateInvoiceNumber } from "@smartisp/utils";
-import { DEFAULT_SUBSCRIBERS } from "../customers/page";
+import { DEFAULT_SUBSCRIBERS } from "@/lib/subscribers";
 import { ReceiptTicket } from "@/components/ui/receipt-ticket";
 import {
   Receipt,

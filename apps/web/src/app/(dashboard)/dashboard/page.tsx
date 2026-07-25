@@ -5,7 +5,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { RoleContext } from "../layout";
 import { formatCurrency } from "@smartisp/utils";
 import { getDashboardMetrics } from "@/lib/actions";
-import { DEFAULT_SUBSCRIBERS } from "../customers/page";
+import { DEFAULT_SUBSCRIBERS } from "@/lib/subscribers";
 import {
   Users,
   DollarSign,

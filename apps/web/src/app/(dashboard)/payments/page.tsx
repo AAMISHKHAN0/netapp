@@ -6,7 +6,7 @@ import { formatCurrency } from "@smartisp/utils";
 import { recordPayment, triggerWhatsAppReminder } from "@/lib/actions";
 import { ReceiptTicket } from "@/components/ui/receipt-ticket";
 import { RoleContext } from "../layout";
-import { DEFAULT_SUBSCRIBERS } from "../customers/page";
+import { DEFAULT_SUBSCRIBERS } from "@/lib/subscribers";
 import {
   CreditCard,
   Search,

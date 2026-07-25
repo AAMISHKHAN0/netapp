@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "pnpm --filter @smartisp/types build && pnpm --filter @smartisp/utils build && pnpm --filter @smartisp/database db:generate && pnpm --filter @smartisp/database build && pnpm --filter @smartisp/auth build && pnpm --filter @smartisp/billing build && pnpm --filter @smartisp/notifications build && pnpm --filter @smartisp/web build",
+  "outputDirectory": "apps/web/.next",
+  "installCommand": "pnpm install"
+}
