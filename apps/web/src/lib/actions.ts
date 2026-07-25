@@ -73,7 +73,7 @@ export async function registerTenantAction(formData: FormData) {
     const tenant = await prisma.tenant.create({
       data: {
         name: ispName,
-        slug,
+        subdomain: slug,
         plan: "STARTER",
       },
     });
@@ -82,7 +82,7 @@ export async function registerTenantAction(formData: FormData) {
       data: {
         tenantId: tenant.id,
         name: "Main Branch",
-        city: "Lahore",
+        address: "Lahore",
       },
     });
 

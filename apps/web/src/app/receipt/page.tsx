@@ -6,7 +6,9 @@ import { Wifi, CheckCircle2, Printer, Download, Share2, ShieldCheck, ArrowLeft, 
 import { formatCurrency } from "@smartisp/utils";
 import Link from "next/link";
 
-export default function ReceiptPrintPDFPage() {
+export const dynamic = "force-dynamic";
+
+function ReceiptContent() {
   const searchParams = useSearchParams();
 
   const receiptNo = searchParams.get("rec") || "REC-849759";
@@ -141,3 +143,12 @@ export default function ReceiptPrintPDFPage() {
     </div>
   );
 }
+
+export default function ReceiptPrintPDFPage() {
+  return (
+    <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center font-sans text-slate-500">Loading receipt...</div>}>
+      <ReceiptContent />
+    </React.Suspense>
+  );
+}
+

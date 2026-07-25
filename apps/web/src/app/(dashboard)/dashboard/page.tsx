@@ -48,10 +48,10 @@ export default function DashboardPage() {
       const serverRes = await getDashboardMetrics(tenantId);
 
       setMetrics({
-        monthlyRevenue: (serverRes?.monthlyRevenue || 45200) + totalCollections,
-        activeSubscribers: activeCount || serverRes?.activeSubscribers || 4,
-        overdueUnpaidBills: serverRes?.overdueUnpaidBills || 1,
-        totalCollectionsThisMonth: (serverRes?.totalCollectionsThisMonth || 14200) + totalCollections,
+        monthlyRevenue: ((serverRes as any)?.monthlyRevenue || 45200) + totalCollections,
+        activeSubscribers: activeCount || (serverRes as any)?.activeCustomers || 4,
+        overdueUnpaidBills: (serverRes as any)?.overdueUnpaidBills || (serverRes as any)?.pendingCount || 1,
+        totalCollectionsThisMonth: ((serverRes as any)?.totalCollectionsThisMonth || 14200) + totalCollections,
         routerOnlineStatus: true,
         cpuUsage: 14,
         ramUsage: 32,
