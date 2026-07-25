@@ -1,0 +1,17 @@
+{
+  "name": "@smartisp/billing",
+  "version": "0.1.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@smartisp/database": "workspace:*",
+    "@smartisp/types": "workspace:*",
+    "@smartisp/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

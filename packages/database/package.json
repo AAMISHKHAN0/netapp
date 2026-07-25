@@ -1,0 +1,21 @@
+{
+  "name": "@smartisp/database",
+  "version": "0.1.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:seed": "tsx src/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "prisma": "^6.3.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
