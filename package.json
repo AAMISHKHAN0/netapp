@@ -12,6 +12,9 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.4",
+    "next": "^15.1.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "turbo": "^2.4.0",
     "typescript": "^5.7.2"
   },
