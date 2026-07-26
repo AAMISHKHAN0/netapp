@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../generated/client";
 
 const dbUrl =
   process.env.DATABASE_URL ||
@@ -23,5 +23,5 @@ if (process.env.NODE_ENV !== "production") {
   globalThis.prismaGlobal = prisma;
 }
 
-export * from "@prisma/client";
+export * from "../generated/client";
 export { setTenantContext, withTenantContext } from "./rls";
