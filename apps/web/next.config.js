@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: [
-    "@smartisp/database",
     "@smartisp/types",
     "@smartisp/auth",
     "@smartisp/utils",
