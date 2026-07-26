@@ -8,6 +8,7 @@ const nextConfig = {
     "@smartisp/billing",
     "@smartisp/notifications",
   ],
+  serverExternalPackages: ["@prisma/client", "@smartisp/database"],
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",
