@@ -38,39 +38,29 @@ export default function DashboardPage() {
     setIsLoading(true);
     setError(null);
     try {
-      // 1. Calculate live customer metrics
-      const savedCusts = localStorage.getItem(`smartisp_tenant_customers_${tenantId}`);
-      const custs = savedCusts ? JSON.parse(savedCusts) : DEFAULT_SUBSCRIBERS;
-      const activeCount = custs.filter((c: any) => c.status === "ACTIVE").length;
-
-      // 2. Calculate live payments collected
-      const savedPays = localStorage.getItem(`smartisp_tenant_payments_${tenantId}`);
-      const payList = savedPays ? JSON.parse(savedPays) : [];
-      const totalCollections = payList.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-
-      // 3. Server action fallback
+      // Fetch real data from server action
       const serverRes = await getDashboardMetrics(tenantId);
 
       setMetrics({
-        monthlyRevenue: ((serverRes as any)?.monthlyRevenue || 45200) + totalCollections,
-        activeSubscribers: activeCount || (serverRes as any)?.activeCustomers || 4,
-        overdueUnpaidBills: (serverRes as any)?.overdueUnpaidBills || (serverRes as any)?.pendingCount || 1,
-        totalCollectionsThisMonth: ((serverRes as any)?.totalCollectionsThisMonth || 14200) + totalCollections,
+        monthlyRevenue: (serverRes as any)?.monthlyRevenue || 0,
+        activeSubscribers: (serverRes as any)?.activeCustomers || 0,
+        overdueUnpaidBills: (serverRes as any)?.overdueUnpaidBills || (serverRes as any)?.pendingCount || 0,
+        totalCollectionsThisMonth: (serverRes as any)?.totalCollectionsThisMonth || 0,
         routerOnlineStatus: true,
         cpuUsage: 14,
         ramUsage: 32,
       });
-    } catch (err) {
-      console.error(err);
-      setError("Failed to connect to server. Displaying cached local data.");
+    } catch (err: any) {
+      console.error("Dashboard fetch error:", err);
+      setError(err.message || "Failed to fetch dashboard data from server.");
       setMetrics({
-        monthlyRevenue: 59400,
-        activeSubscribers: 4,
-        overdueUnpaidBills: 1,
-        totalCollectionsThisMonth: 14200,
-        routerOnlineStatus: true,
-        cpuUsage: 14,
-        ramUsage: 32,
+        monthlyRevenue: 0,
+        activeSubscribers: 0,
+        overdueUnpaidBills: 0,
+        totalCollectionsThisMonth: 0,
+        routerOnlineStatus: false,
+        cpuUsage: 0,
+        ramUsage: 0,
       });
     } finally {
       setIsLoading(false);
