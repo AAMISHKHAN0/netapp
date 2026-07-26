@@ -183,62 +183,68 @@ export async function loginAction(formData: FormData) {
 
 // --- Dashboard Aggregates from Database ---
 export async function getDashboardMetrics(tenantId: string = DEFAULT_TENANT_ID) {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
 
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
-  const todayPayments = await prisma.payment.aggregate({
-    where: { tenantId, receivedAt: { gte: todayStart } },
-    _sum: { amount: true },
-  });
+    const todayPayments = await prisma.payment.aggregate({
+      where: { tenantId, receivedAt: { gte: todayStart } },
+      _sum: { amount: true },
+    });
 
-  const monthPayments = await prisma.payment.aggregate({
-    where: { tenantId, receivedAt: { gte: monthStart } },
-    _sum: { amount: true },
-  });
+    const monthPayments = await prisma.payment.aggregate({
+      where: { tenantId, receivedAt: { gte: monthStart } },
+      _sum: { amount: true },
+    });
 
-  const pendingBills = await prisma.bill.aggregate({
-    where: { tenantId, status: { in: ["UNPAID", "PARTIAL"] } },
-    _sum: { totalDue: true },
-    _count: { id: true },
-  });
+    const pendingBills = await prisma.bill.aggregate({
+      where: { tenantId, status: { in: ["UNPAID", "PARTIAL"] } },
+      _sum: { totalDue: true },
+      _count: { id: true },
+    });
 
-  const activeCustomers = await prisma.customer.count({
-    where: { tenantId, status: "ACTIVE" },
-  });
+    const activeCustomers = await prisma.customer.count({
+      where: { tenantId, status: "ACTIVE" },
+    });
 
-  const totalCustomers = await prisma.customer.count({
-    where: { tenantId },
-  });
+    const totalCustomers = await prisma.customer.count({
+      where: { tenantId },
+    });
 
-  const recentPayments = await prisma.payment.findMany({
-    where: { tenantId },
-    take: 5,
-    orderBy: { receivedAt: "desc" },
-    include: { customer: true, bill: true },
-  });
+    const recentPayments = await prisma.payment.findMany({
+      where: { tenantId },
+      take: 5,
+      orderBy: { receivedAt: "desc" },
+      include: { customer: true, bill: true },
+    });
 
-  const packageStats = await prisma.package.findMany({
-    where: { tenantId },
-    include: { _count: { select: { customers: true } } },
-  });
+    const packageStats = await prisma.package.findMany({
+      where: { tenantId },
+      include: { _count: { select: { customers: true } } },
+    });
 
-  return {
-    todayCollection: Number(todayPayments._sum.amount ?? 0),
-    monthlyRevenue: Number(monthPayments._sum.amount ?? 0),
-    pendingDues: Number(pendingBills._sum.totalDue ?? 0),
-    pendingCount: pendingBills._count.id,
-    activeCustomers,
-    totalCustomers,
-    recentPayments,
-    packageStats,
-  };
+    return {
+      todayCollection: Number(todayPayments._sum.amount ?? 0),
+      monthlyRevenue: Number(monthPayments._sum.amount ?? 0),
+      pendingDues: Number(pendingBills._sum.totalDue ?? 0),
+      pendingCount: pendingBills._count.id,
+      activeCustomers,
+      totalCustomers,
+      recentPayments,
+      packageStats,
+    };
+  } catch (err) {
+    console.error("getDashboardMetrics Error:", err);
+    throw err;
+  }
 }
 
 // --- Customer Actions ---
 export async function getCustomers(searchQuery?: string, statusFilter?: string, tenantId: string = DEFAULT_TENANT_ID) {
-  return prisma.customer.findMany({
+  try {
+    return await prisma.customer.findMany({
     where: {
       tenantId,
       ...(statusFilter && statusFilter !== "ALL" ? { status: statusFilter as any } : {}),
@@ -257,6 +263,10 @@ export async function getCustomers(searchQuery?: string, statusFilter?: string, 
     include: { package: true, branch: true },
     orderBy: { createdAt: "desc" },
   });
+  } catch (err) {
+    console.error("getCustomers Error:", err);
+    throw err;
+  }
 }
 
 export async function createCustomer(input: unknown, roleName: string = "Owner", tenantId: string = DEFAULT_TENANT_ID) {
@@ -386,11 +396,16 @@ export async function updateCustomerFromUI(customerId: string, data: any, roleNa
 
 // --- Package Actions ---
 export async function getPackages(tenantId: string = DEFAULT_TENANT_ID) {
-  return prisma.package.findMany({
+  try {
+    return await prisma.package.findMany({
     where: { tenantId },
     include: { _count: { select: { customers: true } } },
     orderBy: { price: "asc" },
   });
+  } catch (err) {
+    console.error("getPackages Error:", err);
+    throw err;
+  }
 }
 
 export async function createPackage(input: unknown, roleName: string = "Owner", tenantId: string = DEFAULT_TENANT_ID) {
@@ -422,7 +437,8 @@ export async function togglePackageStatus(id: string, isActive: boolean, roleNam
 
 // --- Invoice & Billing Actions ---
 export async function getInvoices(searchQuery?: string, statusFilter?: string, tenantId: string = DEFAULT_TENANT_ID) {
-  return prisma.bill.findMany({
+  try {
+    return await prisma.bill.findMany({
     where: {
       tenantId,
       ...(statusFilter && statusFilter !== "ALL" ? { status: statusFilter as any } : {}),
@@ -438,6 +454,10 @@ export async function getInvoices(searchQuery?: string, statusFilter?: string, t
     include: { customer: true },
     orderBy: { createdAt: "desc" },
   });
+  } catch (err) {
+    console.error("getInvoices Error:", err);
+    throw err;
+  }
 }
 
 export async function createManualInvoice(input: unknown, roleName: string = "Owner", tenantId: string = DEFAULT_TENANT_ID) {
@@ -480,6 +500,19 @@ export async function cancelInvoice(billId: string, roleName: string = "Owner", 
     where: { id: billId },
     data: { status: "CANCELLED" }
   });
+}
+
+export async function getPayments(tenantId: string = DEFAULT_TENANT_ID) {
+  try {
+    return await prisma.payment.findMany({
+      where: { invoice: { tenantId } },
+      include: { invoice: { include: { customer: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+  } catch (err) {
+    console.error("getPayments Error:", err);
+    throw err;
+  }
 }
 
 export async function createBulkInvoices(periodMonth: string, roleName: string = "Owner", tenantId: string = DEFAULT_TENANT_ID) {

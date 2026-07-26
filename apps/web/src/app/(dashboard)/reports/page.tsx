@@ -3,6 +3,7 @@
 import * as React from "react";
 import { RoleContext } from "../layout";
 import { formatCurrency } from "@smartisp/utils";
+import { getPayments } from "@/lib/actions";
 import {
   TrendingUp,
   Download,
@@ -29,56 +30,27 @@ export default function ReportsPage() {
   const { tenantId, tenantName } = React.useContext(RoleContext);
   const [payments, setPayments] = React.useState<PaymentRecord[]>([]);
 
-  const fetchReportsData = React.useCallback(() => {
+  const fetchReportsData = React.useCallback(async () => {
     try {
-      const paymentStorageKey = `smartisp_tenant_payments_${tenantId}`;
-      const savedPayments = localStorage.getItem(paymentStorageKey);
-      if (savedPayments) {
-        setPayments(JSON.parse(savedPayments));
+      const res = await getPayments(tenantId);
+      if (res && res.length > 0) {
+        setPayments(
+          res.map((p: any) => ({
+            id: p.id,
+            receiptNo: p.receiptNo || `REC-${p.id.slice(0,6)}`,
+            customerName: p.invoice?.customer?.name || "Unknown",
+            amount: Number(p.amount),
+            method: p.method,
+            referenceNo: p.referenceNo || "-",
+            createdAt: p.createdAt,
+          }))
+        );
       } else {
-        const defaultPayments: PaymentRecord[] = [
-          {
-            id: "pay-1",
-            receiptNo: "REC-849759",
-            customerName: "Ali Raza Khan",
-            amount: 2900,
-            method: "CASH",
-            referenceNo: "TRX-88221",
-            createdAt: "2026-07-25T10:30:00Z",
-          },
-          {
-            id: "pay-2",
-            receiptNo: "REC-128653",
-            customerName: "Fatima Ahmed",
-            amount: 5220,
-            method: "EASYPAISA",
-            referenceNo: "TRX-99381",
-            createdAt: "2026-07-25T11:15:00Z",
-          },
-          {
-            id: "pay-3",
-            receiptNo: "REC-992314",
-            customerName: "Muhammad Usman",
-            amount: 1740,
-            method: "CASH",
-            referenceNo: "TRX-10928",
-            createdAt: "2026-07-24T14:20:00Z",
-          },
-          {
-            id: "pay-4",
-            receiptNo: "REC-551290",
-            customerName: "Tariq Mehmood",
-            amount: 2900,
-            method: "JAZZCASH",
-            referenceNo: "TRX-44129",
-            createdAt: "2026-07-24T16:05:00Z",
-          },
-        ];
-        setPayments(defaultPayments);
-        localStorage.setItem(paymentStorageKey, JSON.stringify(defaultPayments));
+        setPayments([]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error loading report data:", err);
+      setPayments([]);
     }
   }, [tenantId]);
 

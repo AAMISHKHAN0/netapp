@@ -19,56 +19,10 @@ interface PackageItem {
   subscribersCount: number;
 }
 
-const DEFAULT_BUILTIN_PACKAGES: PackageItem[] = [
-  {
-    id: "pkg-def-1",
-    name: "Home Basic 10Mbps",
-    downloadSpeed: 10,
-    uploadSpeed: 10,
-    price: 1500,
-    taxPercent: 16,
-    isCorporate: false,
-    isActive: true,
-    subscribersCount: 0,
-  },
-  {
-    id: "pkg-def-2",
-    name: "Home Standard 20Mbps",
-    downloadSpeed: 20,
-    uploadSpeed: 20,
-    price: 2500,
-    taxPercent: 16,
-    isCorporate: false,
-    isActive: true,
-    subscribersCount: 0,
-  },
-  {
-    id: "pkg-def-3",
-    name: "Ultra Speed 50Mbps",
-    downloadSpeed: 50,
-    uploadSpeed: 50,
-    price: 4500,
-    taxPercent: 16,
-    isCorporate: false,
-    isActive: true,
-    subscribersCount: 0,
-  },
-  {
-    id: "pkg-def-4",
-    name: "Corporate Fiber 100Mbps",
-    downloadSpeed: 100,
-    uploadSpeed: 100,
-    price: 12000,
-    taxPercent: 16,
-    isCorporate: true,
-    isActive: true,
-    subscribersCount: 0,
-  },
-];
 
 export default function PackagesPage() {
   const { role, tenantId } = React.useContext(RoleContext);
-  const [packages, setPackages] = React.useState<PackageItem[]>(DEFAULT_BUILTIN_PACKAGES);
+  const [packages, setPackages] = React.useState<PackageItem[]>([]);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [toastMsg, setToastMsg] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -97,10 +51,12 @@ export default function PackagesPage() {
           }))
         );
       } else {
-        setPackages(DEFAULT_BUILTIN_PACKAGES);
+        setPackages([]);
       }
-    } catch (err) {
-      setPackages(DEFAULT_BUILTIN_PACKAGES);
+    } catch (err: any) {
+      console.error("Failed to fetch packages:", err);
+      showToast(err.message || "Failed to load packages.");
+      setPackages([]);
     }
   }, [tenantId]);
 
@@ -153,7 +109,8 @@ export default function PackagesPage() {
       showToast(`Package '${name}' created!`);
       setName("");
     } catch (err: any) {
-      showToast("Package created!");
+      console.error(err);
+      showToast(err.message || "Failed to create package.");
     } finally {
       setLoading(false);
     }
