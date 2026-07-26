@@ -13,19 +13,21 @@ import {
   Moon,
   Wifi,
   ChevronDown,
+  Menu,
 } from "lucide-react";
-import { CommandPalette } from "./command-palette";
 
 export function Topbar({
   currentRole,
   onRoleChange,
   tenantName = "SmartISP Operations",
   userName = "Admin User",
+  onMenuClick,
 }: {
   currentRole: string;
   onRoleChange: (role: string) => void;
   tenantName?: string;
   userName?: string;
+  onMenuClick?: () => void;
 }) {
   const { theme, toggleTheme, setTheme } = useTheme();
   const [isProfileOpen, setIsProfileOpen] = React.useState(false);
@@ -43,10 +45,16 @@ export function Topbar({
       {/* Search trigger & Mobile Brand */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2 lg:hidden">
-          <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold">
+          <button
+            onClick={onMenuClick}
+            className="p-1.5 -ml-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold hidden sm:flex">
             <Wifi className="w-4 h-4" />
           </div>
-          <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">{tenantName}</span>
+          <span className="font-bold text-slate-900 dark:text-slate-100 text-sm hidden sm:inline-block truncate max-w-[120px]">{tenantName}</span>
         </div>
 
         <button
@@ -199,8 +207,6 @@ export function Topbar({
           )}
         </div>
       </div>
-
-      <CommandPalette />
     </header>
   );
 }

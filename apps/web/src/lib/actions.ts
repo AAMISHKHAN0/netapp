@@ -288,9 +288,46 @@ export async function createCustomer(input: unknown, roleName: string = "Owner",
   return customer;
 }
 
+export async function createCustomerFromUI(data: any, roleName: string = "Owner", tenantId: string = DEFAULT_TENANT_ID) {
+  assertPermission({ roleName, permissions: [] } as any, "customers", "create");
+  
+  const branch = await prisma.branch.findFirst({ where: { tenantId } });
+  const pkg = await prisma.package.findFirst({ where: { tenantId, name: data.packageName } }) || await prisma.package.findFirst({ where: { tenantId } });
+  
+  if (!branch || !pkg) throw new Error("Branch or Package not found");
+
+  return prisma.customer.create({
+    data: {
+      tenantId,
+      branchId: branch.id,
+      name: data.name,
+      cnic: data.cnic,
+      phone: data.phone,
+      whatsapp: data.whatsapp || data.phone,
+      address: data.address || `${data.houseNo ? `H# ${data.houseNo}, ` : ""}${data.street ? `St ${data.street}, ` : ""}${data.area}, Lahore`,
+      city: "Lahore",
+      area: data.area,
+      street: data.street,
+      houseNo: data.houseNo,
+      onuMac: data.onuMac,
+      routerMac: data.routerMac,
+      staticIp: data.staticIp,
+      packageId: pkg.id,
+      monthlyFee: data.monthlyFee,
+      installationCharge: data.installationCharge || 0,
+      securityDeposit: 0,
+      previousBalance: data.previousBalance || 0,
+      dueDayOfMonth: 10,
+      status: "ACTIVE",
+      pppoeUsername: data.pppoeUsername || data.name.toLowerCase().replace(/\s+/g, "_"),
+    },
+    include: { package: true }
+  });
+}
+
 export async function updateCustomerStatus(
   customerId: string,
-  newStatus: "ACTIVE" | "SUSPENDED" | "CLOSED",
+  newStatus: "ACTIVE" | "SUSPENDED" | "PENDING" | "CLOSED",
   reason: string,
   roleName: string = "Owner"
 ) {
@@ -303,6 +340,47 @@ export async function updateCustomerStatus(
       reasonForStatusChange: reason,
       statusChangedAt: new Date(),
     },
+  });
+}
+
+export async function updateCustomer(
+  customerId: string,
+  data: any,
+  roleName: string = "Owner"
+) {
+  assertPermission({ roleName, permissions: [] } as any, "customers", "edit");
+  return prisma.customer.update({
+    where: { id: customerId },
+    data,
+  });
+}
+
+export async function updateCustomerFromUI(customerId: string, data: any, roleName: string = "Owner", tenantId: string = DEFAULT_TENANT_ID) {
+  assertPermission({ roleName, permissions: [] } as any, "customers", "edit");
+  const pkg = await prisma.package.findFirst({ where: { tenantId, name: data.packageName } });
+  
+  const updateData: any = {
+    name: data.name,
+    phone: data.phone,
+    whatsapp: data.whatsapp || data.phone,
+    cnic: data.cnic,
+    area: data.area,
+    street: data.street,
+    houseNo: data.houseNo,
+    address: data.address || `${data.houseNo ? `H# ${data.houseNo}, ` : ""}${data.street ? `St ${data.street}, ` : ""}${data.area}, Lahore`,
+    onuMac: data.onuMac,
+    routerMac: data.routerMac,
+    staticIp: data.staticIp,
+    pppoeUsername: data.pppoeUsername,
+    monthlyFee: data.monthlyFee,
+    installationCharge: data.installationCharge,
+    status: data.status,
+  };
+  if (pkg) updateData.packageId = pkg.id;
+
+  return prisma.customer.update({
+    where: { id: customerId },
+    data: updateData,
   });
 }
 
@@ -394,6 +472,57 @@ export async function createManualInvoice(input: unknown, roleName: string = "Ow
       pdfUrl: invoiceNo,
     },
   });
+}
+
+export async function cancelInvoice(billId: string, roleName: string = "Owner", tenantId: string = DEFAULT_TENANT_ID) {
+  assertPermission({ roleName, permissions: [] } as any, "billing", "edit");
+  return prisma.bill.update({
+    where: { id: billId },
+    data: { status: "CANCELLED" }
+  });
+}
+
+export async function createBulkInvoices(periodMonth: string, roleName: string = "Owner", tenantId: string = DEFAULT_TENANT_ID) {
+  assertPermission({ roleName, permissions: [] } as any, "billing", "create_invoice");
+
+  const customers = await prisma.customer.findMany({
+    where: { tenantId, status: "ACTIVE" },
+  });
+
+  const existingBills = await prisma.bill.findMany({
+    where: { tenantId, periodMonth },
+    select: { customerId: true },
+  });
+  const existingIds = new Set(existingBills.map((b) => b.customerId));
+
+  const billsToCreate = customers
+    .filter(c => !existingIds.has(c.id))
+    .map((c, idx) => {
+      const tax = Math.round(Number(c.monthlyFee) * 0.16);
+      const totalDue = Number(c.monthlyFee) + tax;
+      const seqStr = (idx + 1).toString().padStart(4, "0");
+      const invoiceNo = `INV-${periodMonth}-${seqStr}`;
+
+      return {
+        tenantId,
+        customerId: c.id,
+        periodMonth,
+        amount: c.monthlyFee,
+        tax,
+        discount: 0,
+        fine: 0,
+        previousBalance: 0,
+        totalDue,
+        dueDate: new Date(new Date().getFullYear(), new Date().getMonth(), 10),
+        status: "UNPAID" as any,
+        pdfUrl: invoiceNo,
+      };
+    });
+
+  if (billsToCreate.length > 0) {
+    await prisma.bill.createMany({ data: billsToCreate });
+  }
+  return { success: true, count: billsToCreate.length };
 }
 
 // --- Payment POS Actions ---

@@ -3,10 +3,9 @@
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@smartisp/utils";
-import { recordPayment, triggerWhatsAppReminder } from "@/lib/actions";
+import { recordPayment, triggerWhatsAppReminder, getCustomers, getDashboardMetrics } from "@/lib/actions";
 import { ReceiptTicket } from "@/components/ui/receipt-ticket";
 import { RoleContext } from "../layout";
-import { DEFAULT_SUBSCRIBERS } from "@/lib/subscribers";
 import {
   CreditCard,
   Search,
@@ -60,36 +59,17 @@ export default function PaymentsPOSPage() {
 
   const fetchTenantCustomers = React.useCallback(async () => {
     try {
-      const storageKey = `smartisp_tenant_customers_${tenantId}`;
-      const saved = localStorage.getItem(storageKey);
-      let mapped: CustomerSearchResult[] = [];
-
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        mapped = parsed
-          .filter((c: any) => c.status !== "SUSPENDED" && c.status !== "CLOSED")
-          .map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            phone: c.phone,
-            area: c.area || "Johar Town",
-            packageName: c.packageName || "Standard Package",
-            totalDue: Number(c.previousBalance || c.monthlyFee || 2500),
-            cnic: c.cnic,
-            status: c.status,
-          }));
-      } else {
-        mapped = DEFAULT_SUBSCRIBERS.filter((c) => c.status === "ACTIVE").map((c) => ({
-          id: c.id,
-          name: c.name,
-          phone: c.phone,
-          area: c.area,
-          packageName: c.packageName,
-          totalDue: c.previousBalance,
-          cnic: c.cnic,
-          status: c.status,
-        }));
-      }
+      const custs = await getCustomers(undefined, "ACTIVE", tenantId);
+      const mapped = custs.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        area: c.area || "Johar Town",
+        packageName: c.package?.name || "Standard Package",
+        totalDue: Number(c.previousBalance || c.monthlyFee || 2500),
+        cnic: c.cnic,
+        status: c.status,
+      }));
 
       setCustomers(mapped);
       if (mapped[0]) {
@@ -99,17 +79,9 @@ export default function PaymentsPOSPage() {
         setSelectedCust(null);
       }
 
-      const paymentStorageKey = `smartisp_tenant_payments_${tenantId}`;
-      const savedPayments = localStorage.getItem(paymentStorageKey);
-      if (savedPayments) {
-        const parsedPay = JSON.parse(savedPayments);
-        const total = parsedPay.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-        setShiftTotal(total);
-        setReceiptCount(parsedPay.length);
-      } else {
-        setShiftTotal(14200);
-        setReceiptCount(6);
-      }
+      const metrics = await getDashboardMetrics(tenantId);
+      setShiftTotal(metrics.todayCollection || 0);
+      setReceiptCount(metrics.recentPayments?.length || 0);
     } catch (err) {
       console.error("Error fetching POS customers:", err);
     }
@@ -133,13 +105,12 @@ export default function PaymentsPOSPage() {
 
     const paidAmount = selectedCust.totalDue > 0 ? selectedCust.totalDue : cashTendered;
     const recNo = `REC-${Date.now().toString().slice(-6)}`;
-    const invNo = `INV-2026-07-${Date.now().toString().slice(-4)}`;
 
     try {
       await recordPayment(
         {
           customerId: selectedCust.id,
-          billId: selectedCust.billId,
+          billId: selectedCust.billId, // Wait, billId may be undefined if no bill selected, actions.ts handles this
           amount: paidAmount,
           method: method as any,
           referenceNo: refNo || undefined,
@@ -148,61 +119,9 @@ export default function PaymentsPOSPage() {
         role,
         tenantId
       );
-    } catch (err: any) {
-      console.log("POS Payment recorded in state");
-    } finally {
-      // 1. Update customer balance in localStorage
-      const updated = customers.map((c) => (c.id === selectedCust.id ? { ...c, totalDue: 0 } : c));
-      setCustomers(updated);
-      localStorage.setItem(`smartisp_tenant_customers_${tenantId}`, JSON.stringify(updated));
 
-      // 2. Persist Payment Transaction to smartisp_tenant_payments_${tenantId}
-      const paymentStorageKey = `smartisp_tenant_payments_${tenantId}`;
-      const existingPay = JSON.parse(localStorage.getItem(paymentStorageKey) || "[]");
-      const newPayRecord = {
-        id: `pay-${Date.now()}`,
-        receiptNo: recNo,
-        customerName: selectedCust.name,
-        amount: paidAmount,
-        method,
-        referenceNo: refNo || "TRX-POS",
-        createdAt: new Date().toISOString(),
-      };
-      localStorage.setItem(paymentStorageKey, JSON.stringify([newPayRecord, ...existingPay]));
+      await fetchTenantCustomers();
 
-      // 3. CRITICAL: Sync & Update Invoice in smartisp_tenant_bills_${tenantId} so Billing Page shows PAID
-      const billStorageKey = `smartisp_tenant_bills_${tenantId}`;
-      const existingBills = JSON.parse(localStorage.getItem(billStorageKey) || "[]");
-      let billFound = false;
-
-      const updatedBills = existingBills.map((b: any) => {
-        if (b.customerName === selectedCust.name && b.status !== "PAID") {
-          billFound = true;
-          return { ...b, status: "PAID" };
-        }
-        return b;
-      });
-
-      if (!billFound) {
-        updatedBills.unshift({
-          id: `bill-${Date.now()}`,
-          invoiceNo: invNo,
-          customerName: selectedCust.name,
-          periodMonth: "2026-07",
-          amount: paidAmount,
-          tax: Math.round(paidAmount * 0.16),
-          discount: 0,
-          fine: 0,
-          previousBalance: 0,
-          totalDue: paidAmount,
-          dueDate: "2026-07-10",
-          status: "PAID",
-        });
-      }
-
-      localStorage.setItem(billStorageKey, JSON.stringify(updatedBills));
-
-      // 4. Set Receipt View
       const receipt = {
         recNo,
         name: selectedCust.name,
@@ -226,6 +145,9 @@ export default function PaymentsPOSPage() {
       setReceiptCount((prev) => prev + 1);
       setSelectedCust({ ...selectedCust, totalDue: 0 });
       setRefNo("");
+    } catch (err: any) {
+      console.error(err);
+      alert("Error recording payment!");
     }
   };
 

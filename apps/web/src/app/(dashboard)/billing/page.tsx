@@ -4,7 +4,7 @@ import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { RoleContext } from "../layout";
 import { formatCurrency, generateInvoiceNumber } from "@smartisp/utils";
-import { DEFAULT_SUBSCRIBERS } from "@/lib/subscribers";
+import { getInvoices, getCustomers, createManualInvoice, createBulkInvoices, recordPayment, cancelInvoice } from "@/lib/actions";
 import { ReceiptTicket } from "@/components/ui/receipt-ticket";
 import {
   Receipt,
@@ -99,32 +99,16 @@ export default function BillingPage() {
     return Array.from(seen.values());
   };
 
-  const fetchTenantData = React.useCallback(() => {
+  const fetchTenantData = React.useCallback(async () => {
     try {
-      const custStorageKey = `smartisp_tenant_customers_${tenantId}`;
-      const savedCusts = localStorage.getItem(custStorageKey);
-      let loadedCusts: CustomerOption[] = [];
-
-      if (savedCusts) {
-        const parsed = JSON.parse(savedCusts);
-        loadedCusts = parsed
-          .filter((c: any) => c.status !== "SUSPENDED" && c.status !== "CLOSED")
-          .map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            phone: c.phone,
-            packageFee: Number(c.monthlyFee || 2500),
-            status: c.status,
-          }));
-      } else {
-        loadedCusts = DEFAULT_SUBSCRIBERS.filter((c) => c.status === "ACTIVE").map((c) => ({
-          id: c.id,
-          name: c.name,
-          phone: c.phone,
-          packageFee: c.monthlyFee,
-          status: c.status,
-        }));
-      }
+      const custs = await getCustomers(undefined, "ACTIVE", tenantId);
+      const loadedCusts = custs.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        packageFee: Number(c.monthlyFee || 2500),
+        status: c.status,
+      }));
 
       setCustomerOptions(loadedCusts);
       if (loadedCusts[0]) {
@@ -132,32 +116,24 @@ export default function BillingPage() {
         setAmount(loadedCusts[0].packageFee);
       }
 
-      const billStorageKey = `smartisp_tenant_bills_${tenantId}`;
-      const savedBills = localStorage.getItem(billStorageKey);
-      let activeBills: BillItem[] = [];
+      const rawBills = await getInvoices("", "ALL", tenantId);
+      const activeBills = rawBills.map((b: any) => ({
+        id: b.id,
+        invoiceNo: b.pdfUrl || b.id.slice(0, 8),
+        customerName: b.customer?.name || "Unknown",
+        periodMonth: b.periodMonth,
+        amount: Number(b.amount),
+        tax: Number(b.tax),
+        discount: Number(b.discount),
+        fine: Number(b.fine),
+        previousBalance: Number(b.previousBalance),
+        totalDue: Number(b.totalDue),
+        dueDate: new Date(b.dueDate).toISOString().split("T")[0],
+        status: b.status,
+      })).filter((b: any) => b.status !== "CANCELLED");
 
-      if (savedBills) {
-        activeBills = JSON.parse(savedBills);
-      } else {
-        activeBills = DEFAULT_SUBSCRIBERS.map((c, i) => ({
-          id: `bill-${i + 1}`,
-          invoiceNo: `INV-2026-07-000${i + 1}`,
-          customerName: c.name,
-          periodMonth: "2026-07",
-          amount: c.monthlyFee,
-          tax: Math.round(c.monthlyFee * 0.16),
-          discount: 0,
-          fine: 0,
-          previousBalance: 0,
-          totalDue: Math.round(c.monthlyFee * 1.16),
-          dueDate: "2026-07-10",
-          status: i === 0 ? "PAID" : "UNPAID",
-        }));
-      }
-
-      const cleaned = deduplicateBills(activeBills);
-      setBills(cleaned);
-      localStorage.setItem(billStorageKey, JSON.stringify(cleaned));
+      const cleaned = deduplicateBills(activeBills as any);
+      setBills(cleaned as any);
     } catch (err) {
       console.error("Error fetching tenant invoices:", err);
     }
@@ -188,19 +164,31 @@ export default function BillingPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleMarkAsPaid = (bill: BillItem) => {
-    const updated = bills.map((b) => (b.id === bill.id ? { ...b, status: "PAID" as const } : b));
-    const cleaned = deduplicateBills(updated);
-    setBills(cleaned);
-    localStorage.setItem(`smartisp_tenant_bills_${tenantId}`, JSON.stringify(cleaned));
+  const handleMarkAsPaid = async (bill: BillItem) => {
+    try {
+      const cust = customerOptions.find(c => c.name === bill.customerName);
+      if (cust) {
+        await recordPayment({
+          customerId: cust.id,
+          billId: bill.id,
+          amount: bill.totalDue,
+          method: "CASH"
+        }, undefined, role, tenantId);
+      }
 
-    if (selectedBill?.id === bill.id) {
-      setSelectedBill({ ...selectedBill, status: "PAID" });
+      await fetchTenantData();
+
+      if (selectedBill?.id === bill.id) {
+        setSelectedBill({ ...selectedBill, status: "PAID" });
+      }
+
+      setReceiptBill({ ...bill, status: "PAID" });
+      setIsDetailsModalOpen(false);
+      showToast(`Invoice '${bill.invoiceNo}' marked as PAID! Thermal receipt issued.`);
+    } catch (err) {
+      console.error(err);
+      showToast("Error recording payment!");
     }
-
-    setReceiptBill({ ...bill, status: "PAID" });
-    setIsDetailsModalOpen(false);
-    showToast(`Invoice '${bill.invoiceNo}' marked as PAID! Thermal receipt issued.`);
   };
 
   const handleOpenDetails = (bill: BillItem) => {
@@ -208,11 +196,15 @@ export default function BillingPage() {
     setIsDetailsModalOpen(true);
   };
 
-  const handleDeleteBill = (billId: string) => {
-    const updated = bills.filter((b) => b.id !== billId);
-    setBills(updated);
-    localStorage.setItem(`smartisp_tenant_bills_${tenantId}`, JSON.stringify(updated));
-    showToast("Duplicate invoice removed!");
+  const handleDeleteBill = async (billId: string) => {
+    try {
+      await cancelInvoice(billId, role, tenantId);
+      await fetchTenantData();
+      showToast("Invoice cancelled/removed!");
+    } catch (err) {
+      console.error(err);
+      showToast("Error removing invoice!");
+    }
   };
 
   // --- PRINT PDF RECEIPT ONLY (Opens /receipt page, not full dashboard) ---
@@ -245,30 +237,16 @@ export default function BillingPage() {
     showToast(`Opening WhatsApp for ${bill.customerName}...`);
   };
 
-  const handleBulkGenerateInvoices = () => {
-    const newBulkBills: BillItem[] = customerOptions.map((cust, idx) => {
-      const tax = Math.round(cust.packageFee * 0.16);
-      const totalDue = cust.packageFee + tax;
-      return {
-        id: `bill-bulk-${Date.now()}-${idx}`,
-        invoiceNo: generateInvoiceNumber("2026-07", bills.length + idx + 1),
-        customerName: cust.name,
-        periodMonth: "2026-07",
-        amount: cust.packageFee,
-        tax,
-        discount: 0,
-        fine: 0,
-        previousBalance: 0,
-        totalDue,
-        dueDate: "2026-07-10",
-        status: "UNPAID",
-      };
-    });
-
-    const cleaned = deduplicateBills([...newBulkBills, ...bills]);
-    setBills(cleaned);
-    localStorage.setItem(`smartisp_tenant_bills_${tenantId}`, JSON.stringify(cleaned));
-    showToast(`⚡ Cleaned & Synced Monthly Invoices for Active Subscribers!`);
+  const handleBulkGenerateInvoices = async () => {
+    try {
+      await createBulkInvoices("2026-07", role, tenantId);
+      await fetchTenantData();
+      showToast(`⚡ Synced Monthly Invoices for Active Subscribers!`);
+      setIsBulkModalOpen(false);
+    } catch (err) {
+      console.error(err);
+      showToast("Error generating bulk invoices!");
+    }
   };
 
   const handleBatchDispatchWhatsApp = async () => {
@@ -289,33 +267,26 @@ export default function BillingPage() {
     e.preventDefault();
     setLoading(true);
 
-    const selectedCust = customerOptions.find((c) => c.id === selectedCustomerId);
-    const custName = selectedCust ? selectedCust.name : "Subscriber";
-    const tax = Math.round(amount * 0.16);
-    const totalDue = amount + tax + fine - discount;
-    const invNo = generateInvoiceNumber("2026-07", bills.length + 1);
+    try {
+      await createManualInvoice({
+        customerId: selectedCustomerId,
+        periodMonth: "2026-07",
+        amount,
+        discount,
+        fine,
+        previousBalance: 0,
+        dueDate: "2026-07-10",
+      }, role, tenantId);
 
-    const newBill: BillItem = {
-      id: `bill-${Date.now()}`,
-      invoiceNo: invNo,
-      customerName: custName,
-      periodMonth: "2026-07",
-      amount,
-      tax,
-      discount,
-      fine,
-      previousBalance: 0,
-      totalDue,
-      dueDate: "2026-07-10",
-      status: "UNPAID",
-    };
-
-    const cleaned = deduplicateBills([newBill, ...bills]);
-    setBills(cleaned);
-    localStorage.setItem(`smartisp_tenant_bills_${tenantId}`, JSON.stringify(cleaned));
-    setIsManualModalOpen(false);
-    setLoading(false);
-    showToast(`Invoice '${newBill.invoiceNo}' generated!`);
+      await fetchTenantData();
+      setIsManualModalOpen(false);
+      showToast(`Manual invoice generated!`);
+    } catch (err) {
+      console.error(err);
+      showToast("Error generating manual invoice!");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

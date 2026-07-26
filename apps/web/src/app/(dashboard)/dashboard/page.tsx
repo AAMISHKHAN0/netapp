@@ -31,8 +31,12 @@ import {
 export default function DashboardPage() {
   const { role, tenantId, tenantName } = React.useContext(RoleContext);
   const [metrics, setMetrics] = React.useState<any>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
   const fetchMetrics = React.useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
     try {
       // 1. Calculate live customer metrics
       const savedCusts = localStorage.getItem(`smartisp_tenant_customers_${tenantId}`);
@@ -57,6 +61,8 @@ export default function DashboardPage() {
         ramUsage: 32,
       });
     } catch (err) {
+      console.error(err);
+      setError("Failed to connect to server. Displaying cached local data.");
       setMetrics({
         monthlyRevenue: 59400,
         activeSubscribers: 4,
@@ -66,6 +72,8 @@ export default function DashboardPage() {
         cpuUsage: 14,
         ramUsage: 32,
       });
+    } finally {
+      setIsLoading(false);
     }
   }, [tenantId]);
 
@@ -112,8 +120,31 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Error State */}
+      {error && (
+        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-800 dark:text-rose-200 flex items-center gap-3 animate-in fade-in">
+          <AlertTriangle className="w-5 h-5 shrink-0" />
+          <span className="text-sm font-medium">{error}</span>
+        </div>
+      )}
+
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {isLoading ? (
+          <>
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-[120px] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 animate-pulse flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <div className="h-4 w-24 bg-slate-100 dark:bg-slate-800 rounded" />
+                  <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800" />
+                </div>
+                <div className="h-7 w-32 bg-slate-100 dark:bg-slate-800 rounded mb-1" />
+                <div className="h-3 w-20 bg-slate-100 dark:bg-slate-800 rounded" />
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
         <StatCard
           title="Monthly Revenue"
           value={formatCurrency(metrics?.monthlyRevenue || 59400)}
@@ -142,6 +173,8 @@ export default function DashboardPage() {
           trend="Live POS & Online Bank"
           trendUp={true}
         />
+          </>
+        )}
       </div>
 
       {/* Recharts Analytics Section */}
@@ -156,21 +189,25 @@ export default function DashboardPage() {
           </div>
 
           <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="month" tickLine={false} stroke="#94a3b8" fontSize={11} />
-                <YAxis tickLine={false} stroke="#94a3b8" fontSize={11} />
-                <Tooltip />
-                <Area type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {isLoading ? (
+              <div className="w-full h-full bg-slate-100 dark:bg-slate-800/50 rounded-xl animate-pulse" />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="month" tickLine={false} stroke="#94a3b8" fontSize={11} />
+                  <YAxis tickLine={false} stroke="#94a3b8" fontSize={11} />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -184,36 +221,46 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-3 text-xs">
-            <div>
-              <div className="flex justify-between text-slate-600 dark:text-slate-400 mb-1">
-                <span>CPU Load:</span>
-                <span className="font-mono font-bold text-slate-900 dark:text-slate-100">14%</span>
+            {isLoading ? (
+              <div className="w-full h-full space-y-4">
+                <div className="h-4 w-full bg-slate-100 dark:bg-slate-800/50 rounded animate-pulse" />
+                <div className="h-4 w-full bg-slate-100 dark:bg-slate-800/50 rounded animate-pulse" />
+                <div className="h-16 w-full bg-slate-100 dark:bg-slate-800/50 rounded-xl animate-pulse mt-4" />
               </div>
-              <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                <div className="h-full bg-blue-600 w-[14%]" />
-              </div>
-            </div>
+            ) : (
+              <>
+                <div>
+                  <div className="flex justify-between text-slate-600 dark:text-slate-400 mb-1">
+                    <span>CPU Load:</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{metrics?.cpuUsage || 14}%</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div className="h-full bg-blue-600 w-[14%]" style={{ width: `${metrics?.cpuUsage || 14}%` }} />
+                  </div>
+                </div>
 
-            <div>
-              <div className="flex justify-between text-slate-600 dark:text-slate-400 mb-1">
-                <span>RAM Memory:</span>
-                <span className="font-mono font-bold text-slate-900 dark:text-slate-100">32%</span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                <div className="h-full bg-indigo-600 w-[32%]" />
-              </div>
-            </div>
+                <div>
+                  <div className="flex justify-between text-slate-600 dark:text-slate-400 mb-1">
+                    <span>RAM Memory:</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{metrics?.ramUsage || 32}%</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div className="h-full bg-indigo-600 w-[32%]" style={{ width: `${metrics?.ramUsage || 32}%` }} />
+                  </div>
+                </div>
 
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 text-[11px] space-y-1">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Model:</span>
-                <span className="font-mono font-semibold">MikroTik CCR1036-12G-4S</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Total Throughput:</span>
-                <span className="font-mono font-semibold text-emerald-600">8.4 Gbps / 10 Gbps</span>
-              </div>
-            </div>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 text-[11px] space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Model:</span>
+                    <span className="font-mono font-semibold">MikroTik CCR1036-12G-4S</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Total Throughput:</span>
+                    <span className="font-mono font-semibold text-emerald-600">8.4 Gbps / 10 Gbps</span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -4,7 +4,7 @@ import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { RoleContext } from "../layout";
 import { maskCNIC, formatCurrency } from "@smartisp/utils";
-import { getCustomers } from "@/lib/actions";
+import { getCustomers, createCustomerFromUI, updateCustomerFromUI, updateCustomerStatus } from "@/lib/actions";
 import {
   Search,
   Plus,
@@ -53,6 +53,14 @@ export default function CustomersPage() {
   const [newArea, setNewArea] = React.useState("Johar Town");
   const [newPackage, setNewPackage] = React.useState("Home Standard 20Mbps");
   const [newFee, setNewFee] = React.useState(2500);
+  const [newWhatsapp, setNewWhatsapp] = React.useState("");
+  const [newHouseNo, setNewHouseNo] = React.useState("");
+  const [newStreet, setNewStreet] = React.useState("");
+  const [newOnuMac, setNewOnuMac] = React.useState("");
+  const [newRouterMac, setNewRouterMac] = React.useState("");
+  const [newStaticIp, setNewStaticIp] = React.useState("");
+  const [newPppoeUser, setNewPppoeUser] = React.useState("");
+  const [newInstallationCharge, setNewInstallationCharge] = React.useState(5000);
 
   // Edit Customer Form state
   const [editName, setEditName] = React.useState("");
@@ -61,6 +69,14 @@ export default function CustomersPage() {
   const [editArea, setEditArea] = React.useState("Johar Town");
   const [editPackage, setEditPackage] = React.useState("Home Standard 20Mbps");
   const [editFee, setEditFee] = React.useState(2500);
+  const [editWhatsapp, setEditWhatsapp] = React.useState("");
+  const [editHouseNo, setEditHouseNo] = React.useState("");
+  const [editStreet, setEditStreet] = React.useState("");
+  const [editOnuMac, setEditOnuMac] = React.useState("");
+  const [editRouterMac, setEditRouterMac] = React.useState("");
+  const [editStaticIp, setEditStaticIp] = React.useState("");
+  const [editPppoeUser, setEditPppoeUser] = React.useState("");
+  const [editInstallationCharge, setEditInstallationCharge] = React.useState(5000);
   const [editStatus, setEditStatus] = React.useState<"ACTIVE" | "SUSPENDED" | "PENDING" | "CLOSED">("ACTIVE");
 
   // Area Form state
@@ -70,13 +86,6 @@ export default function CustomersPage() {
 
   const fetchTenantCustomers = React.useCallback(async () => {
     try {
-      const storageKey = `smartisp_tenant_customers_${tenantId}`;
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        setCustomers(JSON.parse(saved));
-        return;
-      }
-
       const res = await getCustomers(search, statusFilter, tenantId);
       if (res && res.length > 0) {
         const mapped = res.map((c: any) => ({
@@ -95,13 +104,12 @@ export default function CustomersPage() {
           previousBalance: Number(c.previousBalance || 0),
         }));
         setCustomers(mapped);
-        localStorage.setItem(storageKey, JSON.stringify(mapped));
       } else {
-        setCustomers(DEFAULT_SUBSCRIBERS);
-        localStorage.setItem(storageKey, JSON.stringify(DEFAULT_SUBSCRIBERS));
+        setCustomers([]);
       }
     } catch (err) {
-      setCustomers(DEFAULT_SUBSCRIBERS);
+      console.error(err);
+      setCustomers([]);
     }
   }, [search, statusFilter, tenantId]);
 
@@ -131,32 +139,40 @@ export default function CustomersPage() {
     setLoading(true);
 
     try {
-      const newCust: CustomerItem = {
-        id: `cust-${Date.now()}`,
+      await createCustomerFromUI({
         name: newName,
         cnic: newCnic,
         phone: newPhone,
-        whatsapp: newPhone,
-        address: `${newArea}, Lahore`,
+        whatsapp: newWhatsapp,
+        houseNo: newHouseNo,
+        street: newStreet,
         area: newArea,
+        onuMac: newOnuMac,
+        routerMac: newRouterMac,
+        staticIp: newStaticIp,
+        pppoeUsername: newPppoeUser,
         packageName: newPackage,
         monthlyFee: newFee,
-        status: "ACTIVE",
-        pppoeUsername: newName.toLowerCase().replace(/\s+/g, "_"),
+        installationCharge: newInstallationCharge,
         previousBalance: newFee,
-      };
+      }, role, tenantId);
 
-      const updated = [newCust, ...customers];
-      setCustomers(updated);
-      localStorage.setItem(`smartisp_tenant_customers_${tenantId}`, JSON.stringify(updated));
-
+      await fetchTenantCustomers();
       setIsNewCustModalOpen(false);
       showToast(`Subscriber '${newName}' registered!`);
       setNewName("");
       setNewCnic("");
       setNewPhone("");
+      setNewWhatsapp("");
+      setNewHouseNo("");
+      setNewStreet("");
+      setNewOnuMac("");
+      setNewRouterMac("");
+      setNewStaticIp("");
+      setNewPppoeUser("");
     } catch (err: any) {
-      showToast("Subscriber saved!");
+      console.error(err);
+      showToast("Error saving subscriber!");
     } finally {
       setLoading(false);
     }
@@ -171,59 +187,62 @@ export default function CustomersPage() {
     setEditPackage(cust.packageName);
     setEditFee(cust.monthlyFee);
     setEditStatus(cust.status);
+    setEditWhatsapp(cust.whatsapp || "");
+    setEditPppoeUser(cust.pppoeUsername || "");
+    setEditOnuMac(cust.onuMac || "");
+    // Note: Other fields might be available if we fetched them entirely, 
+    // but for now we'll set defaults for the extended fields if missing from CustomerItem
     setIsEditCustModalOpen(true);
   };
 
-  const handleSaveEditCustomer = (e: React.FormEvent) => {
+  const handleSaveEditCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCustomer) return;
 
-    const updated = customers.map((c) =>
-      c.id === editingCustomer.id
-        ? {
-            ...c,
-            name: editName,
-            phone: editPhone,
-            cnic: editCnic,
-            area: editArea,
-            packageName: editPackage,
-            monthlyFee: editFee,
-            status: editStatus,
-          }
-        : c
-    );
-
-    setCustomers(updated);
-    localStorage.setItem(`smartisp_tenant_customers_${tenantId}`, JSON.stringify(updated));
-
-    if (selectedCust?.id === editingCustomer.id) {
-      setSelectedCust({
-        ...selectedCust,
+    try {
+      await updateCustomerFromUI(editingCustomer.id, {
         name: editName,
         phone: editPhone,
+        whatsapp: editWhatsapp,
         cnic: editCnic,
+        houseNo: editHouseNo,
+        street: editStreet,
         area: editArea,
+        onuMac: editOnuMac,
+        routerMac: editRouterMac,
+        staticIp: editStaticIp,
+        pppoeUsername: editPppoeUser,
         packageName: editPackage,
         monthlyFee: editFee,
+        installationCharge: editInstallationCharge,
         status: editStatus,
-      });
-    }
+      }, role, tenantId);
 
-    setIsEditCustModalOpen(false);
-    showToast(`Subscriber ${editName} updated to status: ${editStatus}!`);
+      await fetchTenantCustomers();
+      if (selectedCust?.id === editingCustomer.id) {
+        setSelectedCust(null);
+      }
+      setIsEditCustModalOpen(false);
+      showToast(`Subscriber ${editName} updated!`);
+    } catch (err) {
+      console.error(err);
+      showToast("Error updating subscriber!");
+    }
   };
 
   // --- Perform Status Action Toggle (ACTIVE | SUSPENDED | PENDING | CLOSED) ---
-  const handlePerformStatusChange = (cust: CustomerItem, targetStatus: "ACTIVE" | "SUSPENDED" | "PENDING" | "CLOSED") => {
-    const updated = customers.map((c) => (c.id === cust.id ? { ...c, status: targetStatus } : c));
-    setCustomers(updated);
-    localStorage.setItem(`smartisp_tenant_customers_${tenantId}`, JSON.stringify(updated));
-
-    if (selectedCust?.id === cust.id) {
-      setSelectedCust({ ...selectedCust, status: targetStatus });
+  const handlePerformStatusChange = async (cust: CustomerItem, targetStatus: "ACTIVE" | "SUSPENDED" | "PENDING" | "CLOSED") => {
+    try {
+      await updateCustomerStatus(cust.id, targetStatus, "Manual status change", role);
+      await fetchTenantCustomers();
+      if (selectedCust?.id === cust.id) {
+        setSelectedCust({ ...selectedCust, status: targetStatus });
+      }
+      showToast(`Subscriber ${cust.name} status updated to ${targetStatus}!`);
+    } catch (err) {
+      console.error(err);
+      showToast("Error changing status!");
     }
-
-    showToast(`Subscriber ${cust.name} status updated to ${targetStatus}!`);
   };
 
   // --- Area Management Handlers ---
@@ -606,124 +625,218 @@ export default function CustomersPage() {
       {/* --- EDIT CUSTOMER MODAL --- */}
       {isEditCustModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h2 className="font-bold text-base text-slate-900 dark:text-slate-100">
+          <div className="w-full max-w-2xl max-h-[85vh] flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 p-4 shrink-0">
+              <h2 className="font-bold text-lg text-slate-900 dark:text-slate-100">
                 Edit Subscriber: {editName}
               </h2>
-              <button onClick={() => setIsEditCustModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
+              <button onClick={() => setIsEditCustModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveEditCustomer} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-medium"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Phone</label>
-                  <input
-                    type="text"
-                    required
-                    value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-medium"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">CNIC</label>
-                  <input
-                    type="text"
-                    required
-                    value={editCnic}
-                    onChange={(e) => setEditCnic(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-medium"
-                  />
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-blue-50/60 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 space-y-3">
-                <label className="block font-bold text-blue-900 dark:text-blue-300 flex items-center gap-1.5">
-                  <PackageCheck className="w-4 h-4 text-blue-600" />
-                  Internet Package Tier
-                </label>
-
-                <select
-                  value={editPackage}
-                  onChange={(e) => {
-                    setEditPackage(e.target.value);
-                    if (e.target.value.includes("10Mbps")) setEditFee(1500);
-                    else if (e.target.value.includes("20Mbps")) setEditFee(2500);
-                    else if (e.target.value.includes("50Mbps")) setEditFee(4500);
-                    else if (e.target.value.includes("100Mbps")) setEditFee(12000);
-                  }}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:border-blue-500"
-                >
-                  <option value="Home Basic 10Mbps">Home Basic 10Mbps — Rs. 1,500 / mo</option>
-                  <option value="Home Standard 20Mbps">Home Standard 20Mbps — Rs. 2,500 / mo</option>
-                  <option value="Ultra Speed 50Mbps">Ultra Speed 50Mbps — Rs. 4,500 / mo</option>
-                  <option value="Corporate Fiber 100Mbps">Corporate Fiber 100Mbps — Rs. 12,000 / mo</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Coverage Area</label>
-                  <select
-                    value={editArea}
-                    onChange={(e) => setEditArea(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-medium"
-                  >
-                    {areas.map((a) => (
-                      <option key={a.id} value={a.name}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
+            <div className="overflow-y-auto p-6 flex-1 custom-scrollbar">
+              <form id="edit-customer-form" onSubmit={handleSaveEditCustomer} className="space-y-6 text-sm">
+                
+                {/* Personal Info Section */}
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-800 dark:text-slate-200 border-b pb-2">1. Personal Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Full Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">CNIC Number *</label>
+                      <input
+                        type="text"
+                        required
+                        value={editCnic}
+                        onChange={(e) => setEditCnic(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Mobile Number *</label>
+                      <input
+                        type="text"
+                        required
+                        value={editPhone}
+                        onChange={(e) => setEditPhone(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">WhatsApp</label>
+                      <input
+                        type="text"
+                        value={editWhatsapp}
+                        onChange={(e) => setEditWhatsapp(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Connection Status</label>
-                  <select
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value as any)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-medium"
-                  >
-                    <option value="ACTIVE">🟢 ACTIVE</option>
-                    <option value="SUSPENDED">🔴 SUSPENDED</option>
-                    <option value="PENDING">🟡 PENDING</option>
-                    <option value="CLOSED">⚪ CLOSED</option>
-                  </select>
+                {/* Address Section */}
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-800 dark:text-slate-200 border-b pb-2">2. Installation Address</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Coverage Area *</label>
+                      <select
+                        value={editArea}
+                        onChange={(e) => setEditArea(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      >
+                        {areas.map((a) => (
+                          <option key={a.id} value={a.name}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">House No</label>
+                      <input
+                        type="text"
+                        value={editHouseNo}
+                        onChange={(e) => setEditHouseNo(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Street / Block</label>
+                      <input
+                        type="text"
+                        value={editStreet}
+                        onChange={(e) => setEditStreet(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsEditCustModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-600/20"
-                >
-                  Save Profile & Status Changes
-                </button>
-              </div>
-            </form>
+                {/* Technical / Network Section */}
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-800 dark:text-slate-200 border-b pb-2">3. Network & Connection</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">PPPoE Username</label>
+                      <input
+                        type="text"
+                        value={editPppoeUser}
+                        onChange={(e) => setEditPppoeUser(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Static IP</label>
+                      <input
+                        type="text"
+                        value={editStaticIp}
+                        onChange={(e) => setEditStaticIp(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Router MAC</label>
+                      <input
+                        type="text"
+                        value={editRouterMac}
+                        onChange={(e) => setEditRouterMac(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">ONU MAC</label>
+                      <input
+                        type="text"
+                        value={editOnuMac}
+                        onChange={(e) => setEditOnuMac(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono uppercase"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial Section */}
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-800 dark:text-slate-200 border-b pb-2">4. Financials & Status</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="col-span-1 md:col-span-2">
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-2">
+                        <PackageCheck className="w-4 h-4 text-blue-600" />
+                        Internet Package *
+                      </label>
+                      <select
+                        value={editPackage}
+                        onChange={(e) => {
+                          setEditPackage(e.target.value);
+                          if (e.target.value.includes("10Mbps")) setEditFee(1500);
+                          else if (e.target.value.includes("20Mbps")) setEditFee(2500);
+                          else if (e.target.value.includes("50Mbps")) setEditFee(4500);
+                          else if (e.target.value.includes("100Mbps")) setEditFee(12000);
+                        }}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100 font-bold"
+                      >
+                        <option value="Home Basic 10Mbps">Basic 10Mbps (Rs. 1,500)</option>
+                        <option value="Home Standard 20Mbps">Home Standard 20Mbps (Rs. 2,500)</option>
+                        <option value="Ultra Speed 50Mbps">Ultra Speed 50Mbps (Rs. 4,500)</option>
+                        <option value="Corporate Fiber 100Mbps">Corporate Fiber 100Mbps (Rs. 12,000)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Monthly Fee (Rs)</label>
+                      <input
+                        type="number"
+                        required
+                        value={editFee}
+                        onChange={(e) => setEditFee(Number(e.target.value))}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Connection Status</label>
+                      <select
+                        value={editStatus}
+                        onChange={(e) => setEditStatus(e.target.value as any)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-bold"
+                      >
+                        <option value="ACTIVE">🟢 ACTIVE</option>
+                        <option value="SUSPENDED">🔴 SUSPENDED</option>
+                        <option value="PENDING">🟡 PENDING</option>
+                        <option value="CLOSED">⚪ CLOSED</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+              </form>
+            </div>
+            
+            <div className="p-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsEditCustModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="edit-customer-form"
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-xs flex items-center gap-2"
+              >
+                Save Profile & Status Changes
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -802,105 +915,220 @@ export default function CustomersPage() {
       {/* --- ADD CUSTOMER MODAL --- */}
       {isNewCustModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h2 className="font-bold text-base text-slate-900 dark:text-slate-100">Add New ISP Subscriber</h2>
-              <button onClick={() => setIsNewCustModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
+          <div className="w-full max-w-2xl max-h-[85vh] flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 p-4 shrink-0">
+              <h2 className="font-bold text-lg text-slate-900 dark:text-slate-100">Add New ISP Subscriber</h2>
+              <button onClick={() => setIsNewCustModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddCustomer} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Hassan Ahmed"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
-                />
-              </div>
+            <div className="overflow-y-auto p-6 flex-1 custom-scrollbar">
+              <form id="add-customer-form" onSubmit={handleAddCustomer} className="space-y-6 text-sm">
+                {/* Personal Info Section */}
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-800 dark:text-slate-200 border-b pb-2">1. Personal Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Full Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Hassan Ahmed"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">CNIC Number *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="35202-1234567-1"
+                        value={newCnic}
+                        onChange={(e) => setNewCnic(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Mobile Number *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="03001234567"
+                        value={newPhone}
+                        onChange={(e) => setNewPhone(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">WhatsApp (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="03001234567"
+                        value={newWhatsapp}
+                        onChange={(e) => setNewWhatsapp(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                  </div>
+                </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">CNIC Number</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="35202-1234567-1"
-                    value={newCnic}
-                    onChange={(e) => setNewCnic(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
-                  />
+                {/* Address Section */}
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-800 dark:text-slate-200 border-b pb-2">2. Installation Address</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Coverage Area *</label>
+                      <select
+                        value={newArea}
+                        onChange={(e) => setNewArea(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      >
+                        {areas.map((a) => (
+                          <option key={a.id} value={a.name}>
+                            {a.name} ({a.city})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">House No</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 42-A"
+                        value={newHouseNo}
+                        onChange={(e) => setNewHouseNo(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Street / Block</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. St 5, Block C"
+                        value={newStreet}
+                        onChange={(e) => setNewStreet(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Mobile / WhatsApp</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="03001234567"
-                    value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Select Coverage Area</label>
-                  <select
-                    value={newArea}
-                    onChange={(e) => setNewArea(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-semibold"
-                  >
-                    {areas.map((a) => (
-                      <option key={a.id} value={a.name}>
-                        {a.name} ({a.city})
-                      </option>
-                    ))}
-                  </select>
+                {/* Technical / Network Section */}
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-800 dark:text-slate-200 border-b pb-2">3. Network & Connection</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">PPPoE Username</label>
+                      <input
+                        type="text"
+                        placeholder="Auto-generated if empty"
+                        value={newPppoeUser}
+                        onChange={(e) => setNewPppoeUser(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Static IP</label>
+                      <input
+                        type="text"
+                        placeholder="192.168.x.x (Optional)"
+                        value={newStaticIp}
+                        onChange={(e) => setNewStaticIp(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Router MAC</label>
+                      <input
+                        type="text"
+                        placeholder="00:1A:2B:3C:4D:5E"
+                        value={newRouterMac}
+                        onChange={(e) => setNewRouterMac(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">ONU MAC</label>
+                      <input
+                        type="text"
+                        placeholder="00:1A:2B:3C:4D:5E"
+                        value={newOnuMac}
+                        onChange={(e) => setNewOnuMac(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono uppercase"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Internet Package</label>
-                  <select
-                    value={newPackage}
-                    onChange={(e) => {
-                      setNewPackage(e.target.value);
-                      if (e.target.value.includes("10Mbps")) setNewFee(1500);
-                      else if (e.target.value.includes("20Mbps")) setNewFee(2500);
-                      else if (e.target.value.includes("50Mbps")) setNewFee(4500);
-                      else if (e.target.value.includes("100Mbps")) setNewFee(12000);
-                    }}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
-                  >
-                    <option value="Home Basic 10Mbps">Basic 10Mbps (Rs. 1,500)</option>
-                    <option value="Home Standard 20Mbps">Home Standard 20Mbps (Rs. 2,500)</option>
-                    <option value="Ultra Speed 50Mbps">Ultra Speed 50Mbps (Rs. 4,500)</option>
-                    <option value="Corporate Fiber 100Mbps">Corporate Fiber 100Mbps (Rs. 12,000)</option>
-                  </select>
-                </div>
-              </div>
 
-              <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsNewCustModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-xs flex items-center gap-2"
-                >
-                  {loading ? "Saving..." : "Save Customer Profile"}
-                </button>
-              </div>
-            </form>
+                {/* Financial Section */}
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-800 dark:text-slate-200 border-b pb-2">4. Financials</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="col-span-1 md:col-span-2">
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Internet Package *</label>
+                      <select
+                        value={newPackage}
+                        onChange={(e) => {
+                          setNewPackage(e.target.value);
+                          if (e.target.value.includes("10Mbps")) setNewFee(1500);
+                          else if (e.target.value.includes("20Mbps")) setNewFee(2500);
+                          else if (e.target.value.includes("50Mbps")) setNewFee(4500);
+                          else if (e.target.value.includes("100Mbps")) setNewFee(12000);
+                        }}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100 font-bold"
+                      >
+                        <option value="Home Basic 10Mbps">Basic 10Mbps (Rs. 1,500)</option>
+                        <option value="Home Standard 20Mbps">Home Standard 20Mbps (Rs. 2,500)</option>
+                        <option value="Ultra Speed 50Mbps">Ultra Speed 50Mbps (Rs. 4,500)</option>
+                        <option value="Corporate Fiber 100Mbps">Corporate Fiber 100Mbps (Rs. 12,000)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Monthly Fee (Rs)</label>
+                      <input
+                        type="number"
+                        required
+                        value={newFee}
+                        onChange={(e) => setNewFee(Number(e.target.value))}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Installation Charge (Rs)</label>
+                      <input
+                        type="number"
+                        required
+                        value={newInstallationCharge}
+                        onChange={(e) => setNewInstallationCharge(Number(e.target.value))}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+              </form>
+            </div>
+            
+            <div className="p-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsNewCustModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="add-customer-form"
+                disabled={loading}
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-xs flex items-center gap-2"
+              >
+                {loading ? "Saving..." : "Save Customer Profile"}
+              </button>
+            </div>
           </div>
         </div>
       )}

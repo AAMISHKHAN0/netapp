@@ -21,6 +21,8 @@ import {
 interface SidebarProps {
   currentRole: string;
   tenantName?: string;
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 const NAV_ITEMS = [
@@ -33,16 +35,25 @@ const NAV_ITEMS = [
   { href: "/reports", label: "Income Reports", icon: BarChart3 },
 ];
 
-export function Sidebar({ currentRole, tenantName = "SmartISP Operations" }: SidebarProps) {
+export function Sidebar({ currentRole, tenantName = "SmartISP Operations", isMobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = React.useState(false);
 
   return (
-    <aside
-      className={`h-screen sticky top-0 z-20 flex flex-col justify-between border-r border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#0D121F] transition-all duration-300 ${
-        collapsed ? "w-20" : "w-64"
-      }`}
-    >
+    <>
+      {/* Mobile Backdrop */}
+      {isMobileOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 md:hidden" 
+          onClick={onMobileClose}
+        />
+      )}
+      
+      <aside
+        className={`fixed md:sticky top-0 left-0 z-50 h-screen flex flex-col justify-between border-r border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#0D121F] transition-all duration-300 ${
+          collapsed ? "w-20" : "w-64"
+        } ${isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+      >
       {/* Top Brand & Toggle */}
       <div className="h-16 px-4 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between shrink-0">
         <Link href="/dashboard" className="flex items-center gap-3 overflow-hidden">
@@ -120,5 +131,6 @@ export function Sidebar({ currentRole, tenantName = "SmartISP Operations" }: Sid
         )}
       </div>
     </aside>
+    </>
   );
 }
