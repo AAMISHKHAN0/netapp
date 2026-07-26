@@ -1,13 +1,16 @@
 /** @type {import('next').NextConfig} */
+const path = require("path");
+
 const nextConfig = {
+  outputFileTracingRoot: path.join(__dirname, "../../"),
   transpilePackages: [
+    "@smartisp/database",
     "@smartisp/types",
     "@smartisp/auth",
     "@smartisp/utils",
     "@smartisp/billing",
     "@smartisp/notifications",
   ],
-  serverExternalPackages: ["@prisma/client", "@smartisp/database"],
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",
