@@ -40,6 +40,10 @@ export default function DashboardPage() {
     try {
       // Fetch real data from server action
       const serverRes = await getDashboardMetrics(tenantId);
+      
+      if ((serverRes as any)?.error) {
+        throw new Error((serverRes as any).error);
+      }
 
       setMetrics({
         monthlyRevenue: (serverRes as any)?.monthlyRevenue || 0,

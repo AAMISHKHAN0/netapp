@@ -235,9 +235,9 @@ export async function getDashboardMetrics(tenantId: string = DEFAULT_TENANT_ID) 
       recentPayments,
       packageStats,
     };
-  } catch (err) {
+  } catch (err: any) {
     console.error("getDashboardMetrics Error:", err);
-    throw err;
+    return { error: err.message || "Failed to fetch metrics" };
   }
 }
 
